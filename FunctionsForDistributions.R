@@ -91,6 +91,7 @@ FunctionPDFRetriver<-function(Function)
   {
     return(Function(x)$PDFValue)
   }
+  PDFValueFunction=Vectorize(PDFValueFunction)
   return(PDFValueFunction)
 }
 
@@ -101,5 +102,6 @@ FunctionCDFRetriver<-function(Function)
   {
     return(Function(x)$CDFValue)
   }
+  CDFValueFunction=Vectorize(CDFValueFunction)
   return(CDFValueFunction)
 }

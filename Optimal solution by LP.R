@@ -1382,7 +1382,7 @@ OptimalDualDesicionPolicy<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,A
 
 FindOptimalEquilibriumValuesByDual<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,AlphaVec=NULL)
 {
-  BVec=ceiling(xVec)
+  
   #We first solve the dual problem to find optimal actions
   print("Starting to solve Dual LP")
   Solved=OptimalDualDesicionPolicy(AdjMatrix,n,xVec,bVec,CostVec,LambdaVec)

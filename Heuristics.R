@@ -2,7 +2,7 @@ source("Index Implementation.R")
 
 #One step Benefit Heuristic
 #This function decides given the current state to look at the available actions and pick the action that produces the highest index
-OneStepBenefitHeuristic<-function(n,AdjacencyMatrix,IndexForNodeFunction,sVec,vVec,CostVec,LambdaVec,bVec,xVec,vMaxVec=NULL)
+OneStepBenefitHeuristic<-function(n,AdjacencyMatrix,IndexForNodeFunction,sVec,vVec,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,vMaxVec=NULL)
 {
   if(is.null(vMaxVec))
   {
