@@ -1,5 +1,27 @@
 source("Optimal solution by LP.R")
 
+#Index List Creator
+source("Index Creator.R")
+CreateIndexList<-function(OmegaStepSize,AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,MinTolerance,MaxSteps,TypeOfAttackTimeDis="CDF")
+{
+  IndexList=list()
+  for(i in 1:n)
+  {
+    IndexFinder=FindIndexMatrix(OmegaStepSize,AttackCDFVec[[i]],BVec[i],bVec[i],CostVec[i],LambdaVec[i],MinTolerance,MaxSteps,TypeOfAttackTimeDis="CDF")
+    IndexList[[i]]=AlterIndexMatrix(IndexFinder$IndexMatrix,IndexFinder$BoundaryHitValue,IgnoreIndexibility=F)
+  }
+  return(IndexList)
+}
+
+#Index Reader
+#This function 
+IndexFromListReader<-function(node,s,v,IndexList)
+{
+  return(IndexList[[node]][s,v+1])
+}
+
+if(FALSE)
+{  
 FindVMax<-function(Lambda,b,x)
 {
   #First calculate B and the remainder
@@ -369,3 +391,4 @@ IndicesForNodes<-function(n,IndexForNodeFunction,sVec,vVec,CostVec,LambdaVec,bVe
 # {
 # 
 # }
+}

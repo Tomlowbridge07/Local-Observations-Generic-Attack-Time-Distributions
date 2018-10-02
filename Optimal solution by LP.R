@@ -316,12 +316,7 @@ CreateSVStates<-function(n,BVec,bVec)
   return(FullStateSpace) 
 }
 
-#This function is a variation on the above with the possibility of having an unkown transitionary state.
-CreateTransSVStates<-function(n,BVec,bVec)
 {
-  
-}
-
 # #create function for expectation of evolved state
 # ListOfEvolvedState<-function(StateVector,NodeMovedTo,n,B,b)
 # {
@@ -362,6 +357,7 @@ CreateTransSVStates<-function(n,BVec,bVec)
 #   
 #   return(EvolvedIDs)
 # }
+}
 
 #Evolution of S states function
 NewSState<-function(CurrentSState,NodeMovedTo,BVec)
@@ -485,6 +481,9 @@ IdenityRow<-function(Vec,Mat)
   return(-1)
 }
 
+#This section contains the incurred costs, but we have changed to a Cost To progress matrix
+if(FALSE)
+{
 #Moving non-instaneously
 CostOfActionOnNode<-function(Node,StateVector,NodeMovedTo,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
 {
@@ -569,11 +568,52 @@ SeperatedCostOfAction<-function(StateVector,NodeMovedTo,n,CostVec,LambdaVec,Atta
   
   return(list(CostDueToArrivals=SumDueToArrivals,CostDueToObserved=SumDueToObserved))
 }  
+
+}
+
+#Creation of Cost to progress
+source("General attack solver.R")
+CreateCostToProgressList<-function(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+{
+  CostToProgressList=list()
+  for(i in 1:length(AttackCDFVec))
+  {
+    CostToProgressList[[i]]=GenerateCostToProgressMatrix(BVec[i]+1,bVec[i]+1,CostVec[i],LambdaVec[i],AttackCDFVec[[i]])
+  }
+  return(CostToProgressList)
+}
+
+#Rewriting Cost of action function
+CostOfAction<-function(StateVector,NodeToMoveTo,n,CostToProgressList)
+{
+  #We add up all costs incurred when we progress. That is all costs of other nodes
+  Cost=0
+  for(i in 1:length(CostToProgressList))
+  {
+    if(i!=NodeToMoveTo)
+    {
+      Cost=Cost+CostToProgressList[[i]][StateVector[i],StateVector[i+n]+1]
+    }
+  }
+  return(Cost)
+}
+
+CostToNeglect<-function(StateVector,n,CostToProgressList)
+{
   
+  #We can use prior formula but with no node every visited
+  return(CostOfAction(StateVector,-1,n,CostToProgressList))
+}
+
   
 #create for a state the constraint matrix parts for a particular state
-CreateConstraintMatrixForState<-function(StateVector,AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,SVStateSpace=NULL)
+CreateConstraintMatrixForState<-function(StateVector,AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,CostToProgressList=NULL,SVStateSpace=NULL)
 {
+  if(is.null(CostToProgressList))
+  {
+    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    print(CostToProgressList)
+  }
   if(is.null(SVStateSpace))
   {
     SVStateSpace=CreateSVStates(n,BVec,bVec)
@@ -629,14 +669,18 @@ CreateConstraintMatrixForState<-function(StateVector,AdjMatrix,n,CostVec,LambdaV
    }
    
    ALHS=rbind(ALHS,ConstraintRow)
-   bRHS=c(bRHS,CostOfAction(StateVector,NodeToMoveTo,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec))
+   bRHS=c(bRHS,CostOfAction(StateVector,NodeToMoveTo,n,CostToProgressList))
   }
-  
   return(list(LHS=ALHS,RHS=bRHS))
 }
 
-CreateConstraintMatrix<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+CreateConstraintMatrix<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
 {
+  #Create the Cost to progress list
+  print("Constructing Cost to progress list")
+  CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+  print("Constructed")
+  print(CostToProgressList)
   #We now repeat for each possible state the construction and bind together
   print("Constructing SV State Space")
   SVStateSpace=CreateSVStates(n,BVec,bVec)
@@ -655,16 +699,16 @@ CreateConstraintMatrix<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,Atta
 
     
     #For each state run prior construction and retreive
-    FullConstraintMatrix=rbind(FullConstraintMatrix,CreateConstraintMatrixForState(SVStateSpace[i,],AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,SVStateSpace)$LHS)
-    Fullbounds=c(Fullbounds,CreateConstraintMatrixForState(SVStateSpace[i,],AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,SVStateSpace)$RHS)
+    FullConstraintMatrix=rbind(FullConstraintMatrix,CreateConstraintMatrixForState(SVStateSpace[i,],AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,CostToProgressList,SVStateSpace)$LHS)
+    Fullbounds=c(Fullbounds,CreateConstraintMatrixForState(SVStateSpace[i,],AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,CostToProgressList,SVStateSpace)$RHS)
     
   }
   return(list(MatrixConstraints=FullConstraintMatrix,VectorBounds=Fullbounds,SVStateSpace=SVStateSpace))
 }
 
-SolveLP<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+SolveLP<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
 {
-  CreatedAb=CreateConstraintMatrix(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+  CreatedAb=CreateConstraintMatrix(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
   A=CreatedAb$MatrixConstraints
   b=CreatedAb$VectorBounds
   
@@ -964,9 +1008,12 @@ ActiveConstraintsExperimental<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFV
 
 
 #We Note our list of x,y are in the form of blocks; x->state->action
-CreateDualSetup<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,SVStateSpace=NULL,AlphaVec=NULL)
+CreateDualSetup<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,CostToProgressList=NULL,SVStateSpace=NULL,AlphaVec=NULL)
 {
-
+  if(is.null(CostToProgressList))
+  {
+    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+  }
   if(is.null(SVStateSpace))
   {
     SVStateSpace=CreateSVStates(n,BVec,bVec)
@@ -1218,22 +1265,22 @@ CreateDualSetup<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVe
       #For this state and this action store the cost in the objective function
       if(StateNumber==1)
       {
-        Objective[ActionNumber]=CostOfAction(State,Actions[ActionNumber],n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+        Objective[ActionNumber]=CostOfAction(State,Actions[ActionNumber],n,CostToProgressList)
       }
       else
       {
-        Objective[sum(NumberOfActionsFromState[1:StateNumber-1])+ActionNumber]=CostOfAction(State,Actions[ActionNumber],n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+        Objective[sum(NumberOfActionsFromState[1:StateNumber-1])+ActionNumber]=CostOfAction(State,Actions[ActionNumber],n,CostToProgressList)
       }
     }
   }
   
-  return(list(Objective=Objective,MatrixConstraints=ALHS,VectorBounds=bRHS,StateSpace=SVStateSpace,NumberOfActionsFromState=NumberOfActionsFromState,AlphaVec=AlphaVec))
+  return(list(Objective=Objective,MatrixConstraints=ALHS,VectorBounds=bRHS,CostToProgressList=CostToProgressList,StateSpace=SVStateSpace,NumberOfActionsFromState=NumberOfActionsFromState,AlphaVec=AlphaVec))
 }
   
-SolveDualLP<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+SolveDualLP<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
 {
   print("Starting to Set up the dual problem")
-  CreatedDual=CreateDualSetup(AdjMatrix,n,xVec,bVec,CostVec,LambdaVec)
+  CreatedDual=CreateDualSetup(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
   A=CreatedDual$MatrixConstraints
   b=CreatedDual$VectorBounds
   StateSpace=CreatedDual$StateSpace
@@ -1253,13 +1300,14 @@ SolveDualLP<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BV
   return(list(Value=Solved$objval ,Solution=Solved$solution,StateSpace=StateSpace))
 }
 
-OptimalDualDesicionPolicy<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec)
+OptimalDualDesicionPolicy<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
 {
   #Solve the Dual LP
-  CreatedDual=CreateDualSetup(AdjMatrix,n,xVec,bVec,CostVec,LambdaVec)
+  CreatedDual=CreateDualSetup(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
   A=CreatedDual$MatrixConstraints
   b=CreatedDual$VectorBounds
   SVStateSpace=CreatedDual$StateSpace
+  CostToProgressList=CreatedDual$CostToProgressList
   NumberOfActionsFromState=CreatedDual$NumberOfActionsFromState
   
   print(A)
@@ -1376,20 +1424,21 @@ OptimalDualDesicionPolicy<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,A
     
   }
   
-  return(list(OptimalValue=Value,OptimalDecision=OptimalDecision,StateSpace=SVStateSpace,AlphaVec=CreatedDual$AlphaVec))
+  return(list(OptimalValue=Value,OptimalDecision=OptimalDecision,CostToProgressList=CostToProgressList,StateSpace=SVStateSpace,AlphaVec=CreatedDual$AlphaVec))
   
 }
 
-FindOptimalEquilibriumValuesByDual<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec,AlphaVec=NULL)
+FindOptimalEquilibriumValuesByDual<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,AlphaVec=NULL)
 {
   
   #We first solve the dual problem to find optimal actions
   print("Starting to solve Dual LP")
-  Solved=OptimalDualDesicionPolicy(AdjMatrix,n,xVec,bVec,CostVec,LambdaVec)
+  Solved=OptimalDualDesicionPolicy(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
   print("Dual LP solved")
   OptimalValue=Solved$OptimalValue
   OptimalDecision=Solved$OptimalDecision
   SVStateSpace=Solved$StateSpace
+  CostToProgressList=Solved$CostToProgressList
   if(is.null(AlphaVec))
   {
     AlphaVec=Solved$AlphaVec
@@ -1455,7 +1504,7 @@ FindOptimalEquilibriumValuesByDual<-function(AdjMatrix,n,CostVec,LambdaVec,Attac
       ConstraintRow[NumStates+NewStateID]=ConstraintRow[NumStates+NewStateID]-NewStateProbs[i]
     }
     ConstraintsMatrix=rbind(ConstraintsMatrix,ConstraintRow)
-    VectorValue=c(VectorValue,CostOfAction(State,NodeMovedTo,n,CostVec,LambdaVec,AttackCDFVec,AttackPDFVec,BVec,bVec))
+    VectorValue=c(VectorValue,CostOfAction(State,NodeMovedTo,n,CostToProgressList))
   }
   
   print("Constraints are")
