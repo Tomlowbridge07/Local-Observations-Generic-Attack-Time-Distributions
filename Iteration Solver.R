@@ -12,7 +12,7 @@ IterationSolver<-function(Omega,AttackTimeDistribution,B,b,Cost,Lambda,TypeOfAtt
  }
   
  #Generate cost matrix
- CostToProgressMatrix=GenerateCostToProgressMatrix(B+1,b+1,Cost,Lambda,AttackTimeDistribution)
+ CostToProgressMatrix=GenerateCostToProgressMatrix(B+1,b+1,Cost,Lambda,AttackTimeDistribution)$CostToProgressMatrix
  
  #Then we peform iterations to find g with an initial guess of c * lambda
  InitialGuess= Cost * Lambda

@@ -20,6 +20,20 @@ IndexFromListReader<-function(node,s,v,IndexList)
   return(IndexList[[node]][s,v+1])
 }
 
+#Average index for mean evolved states
+AverageIndexFromListReader<-function(node,s,v,IndexList,Lambda,b)
+{
+  IndexRow=IndexList[[node]][s,v+1]
+  #Using Truncated distribution we work out the expected value
+  AverageIndex=0
+  for(i in 1:length(IndexRow))
+  {
+    AverageIndex=AverageIndex+IndexRow[i]*TruncPoissonPMF(Lambda,b,i)
+  }
+  
+  return(AverageIndex)
+}
+
 if(FALSE)
 {  
 FindVMax<-function(Lambda,b,x)

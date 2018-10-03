@@ -3,7 +3,7 @@ source("Value Iteration approach.R")
 
 #This function runs our optimality and heuristic policy to compare the answers
 #It runs the optimal policy to find the optimal answer then runs the policy in value iteration
-RunTest<-function(AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,HeuristicFunction,HeuristicDepth,IndexForNodeFunction,MaxStepsForIteration,
+RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,HeuristicDepth,IndexList,MaxStepsForIteration,
                   UseValueItForOptimal=FALSE,ValueItOptMaxSteps=500,ValueItOptTolerance=0.001,PrintOutput=FALSE)
 {
   n=nrow(AdjacencyMatrix)
@@ -16,7 +16,7 @@ RunTest<-function(AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,HeuristicFunction,
    {
      print("We are going to solve the dual problem first")
    }
-   DualSolved=SolveDualLP(AdjacencyMatrix,n,xVec,bVec,CostVec,LambdaVec)
+   DualSolved=SolveDualLP(AdjacencyMatrix,n,AttackCDFVec,CostVec,LambdaVec,BVec,bVec)
    DualObjectiveValue=DualSolved$Value
    StateSpace=DualSolved$StateSpace
    if(PrintOutput)

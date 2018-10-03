@@ -1,6 +1,6 @@
 source("Index Implementation.R")
 
-DeterministicCostEvaluationOfPath<-function(Path,n,sVec,vVec,CostVec,LambdaVec,BVec,bVec,CostToProgressList)
+DeterministicCostEvaluationOfPath<-function(Path,n,sVec,vVec,CostVec,LambdaVec,BVec,bVec,CostToProgressArrivalsList,CostToProgressObsList)
 {
   #We follow the path for as many steps as it has
   i=1
@@ -8,7 +8,7 @@ DeterministicCostEvaluationOfPath<-function(Path,n,sVec,vVec,CostVec,LambdaVec,B
   while(Path[i]!=0 && i<=length(Path))
   {
     #Add actions cost
-    SumOfCost=SumOfCost+CostOfAction(c(sVec,vVec),Path[i],n,CostToProgressList)
+    SumOfCost=SumOfCost+CostOfActionFromNonIntergerObs(c(sVec,vVec),Path[i],n,CostToProgressArrivalsList,CostToProgressObsList)
     
     #Evolve DETERMINISTICALLY
     sVec=NewSState(sVec,Path[i],BVec)
@@ -52,12 +52,16 @@ DecayToEndCost<-function(n,sVec,vVec,CostVec,LambdaVec,bVec,BVec,AttackCDFVec,Co
 }
 
 #Here we sum the indices up over the number of steps for all paths of the Number of steps
-MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVec,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList=NULL,PrintOutput=FALSE)
+MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVec,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList=NULL,
+                                    CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL,PrintOutput=FALSE)
 {
   #Generate cost to progress list if not given
-  if(is.null(CostToProgressList))
+  if(is.null(CostToProgressList) || is.null(CostToProgressArrivalsList) || is.null(CostToProgressObsList))
   {
-    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+    CostToProgressArrivalsList=CreatedCostLists$CostToProgressArrivalsList
+    CostToProgressObsList=CreatedCostLists$CostToProgressObsList
   }
   
   if(PrintOutput)
@@ -67,6 +71,8 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
   
   
   Paths=matrix(0,nrow=0,ncol=NoSteps)
+  #Stores true and false for what states have evolved along the paths
+  HasVEvolved=matrix(0,nrow=0,ncol=n)
   #Note. We will be using mean v Evolution for use with the index
   EvolvedStates=matrix(0,nrow=0,ncol=2*n)
   BenefitForPath=vector(length=0)
@@ -99,6 +105,9 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
         if(Actions[action]==1)
         {
           Paths=rbind(Paths,c(action,rep(0,NoSteps-1)))
+          PathEvolved=rep(F,n)
+          PathEvolved[action]=T
+          HasVEvolved=rbind(HasVEvolved,PathEvolved)
           NewsVec=NewSState(sVec,action,BVec)
           EvolvedStates=rbind(EvolvedStates,c(NewsVec,NewMeanVState(vVec,NewsVec,action,BVec,bVec,LambdaVec)))
           print(EvolvedStates)
@@ -110,6 +119,7 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
       if(PrintOutput)
       {
        print(Paths)
+        print(HasVEvolved)
        print(BenefitForPath)
       }
       
@@ -134,10 +144,12 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
       
       #We need to copy and expand each
       OldPaths=Paths
+      OldHasVEvolved=HasVEvolved
       OldEvolvedStates=EvolvedStates
       OldBenefitForPath=BenefitForPath
       
       Paths=matrix(0,nrow=0,ncol=NoSteps)
+      HasVEvolved=matrix(0,nrow=0,ncol=n)
       EvolvedStates=matrix(0,nrow=0,ncol=2*n)
       BenefitForPath=vector(length=0)
       
@@ -153,11 +165,15 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
           BenefitForAction[action]=0
           if(Actions[action]==1)
           {
-            print("Evolved state is")
-            print(c(OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action]))
-            print(CostToProgressList)
-            print(IndexFromListReader(action,OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action],IndexList))
-           BenefitForAction[action]=IndexFromListReader(action,OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action],IndexList)
+            #To find the benefit of the action we use normal if we have not evolved v , otherwise use average
+           if(OldHasVEvolved[row,action]==F)
+           {
+             BenefitForAction[action]=IndexFromListReader(action,OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action],IndexList)
+           }
+           if(OldHasVEvolved[row,action]==T)
+           {
+             BenefitForAction[action]=AverageIndexFromListReader(action,OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action],IndexList,LambdaVec[action],bVec[action])
+           }
           }
         }
 
@@ -168,6 +184,9 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
           if(Actions[action]==1)
           {
             Paths=rbind(Paths,c(OldPaths[row,1:(Step-1)],action,rep(0,NoSteps-Step)))
+            PathEvolved=OldHasVEvolved[row,]
+            PathEvolved[action]=T
+            HasVEvolved=rbind(HasVEvolved,PathEvolved)
             NewsVec=NewSState(OldEvolvedStates[row,1:n],action,BVec)
             EvolvedStates=rbind(EvolvedStates,c(NewsVec,NewMeanVState(OldEvolvedStates[row,(n+1):(2*n)],NewsVec,action,BVec,bVec,LambdaVec)))
             BenefitForPath=c(BenefitForPath,OldBenefitForPath[row]+BenefitForAction[action])
@@ -179,6 +198,7 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
       if(PrintOutput)
       {
         print(Paths)
+        print(HasVEvolved)
         print(BenefitForPath)
       }
       #Identify the maximal elements
@@ -209,7 +229,7 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
   {
     #We compute the average cost of following such a strategy to decide which paths to pick
     #We use determinsitic evolution to the mean state in v
-    DeterministicGen=DeterministicCostEvaluationOfPath(BestPathforStep[i,],n,sVec,vVec,CostVec,LambdaVec,BVec,bVec,CostToProgressList)
+    DeterministicGen=DeterministicCostEvaluationOfPath(BestPathforStep[i,],n,sVec,vVec,CostVec,LambdaVec,BVec,bVec,CostToProgressArrivalsList,CostToProgressObsList)
     AverageCostForPath[i]=DeterministicGen$Average
     #For each Path we have have end point
     EndOfPathState=DeterministicGen$NewMeanSVState
@@ -235,22 +255,27 @@ MultiStepBenefitHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVe
 
 
 #Here we sum the indices up over the number of steps for all paths of the Number of steps
-MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFunction,sVec,vVec,CostVec,LambdaVec,bVec,xVec,vMaxVec=NULL,PrintOutput=FALSE)
+MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexList,sVec,vVec,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList=NULL,
+                                    CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL,PrintOutput=FALSE)
 {
+  #Generate cost to progress list if not given
+  if(is.null(CostToProgressList) || is.null(CostToProgressArrivalsList) || is.null(CostToProgressObsList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+    CostToProgressArrivalsList=CreatedCostLists$CostToProgressArrivalsList
+    CostToProgressObsList=CreatedCostLists$CostToProgressObsList
+  }
+  
   if(PrintOutput)
   {
     print("Heuristic is Run")
   }
-  if(is.null(vMaxVec))
-  {
-    #Create vMaxVec
-    vMaxVec=CreateVMaxVector(n,LambdaVec,bVec,xVec)
-  }
-  
-  BVec=ceiling(xVec)
   
   
   Paths=matrix(0,nrow=0,ncol=NoSteps)
+  #Stores true and false for what states have evolved along the paths
+  HasVEvolved=matrix(0,nrow=0,ncol=n)
   #Note. We will be using mean v Evolution for use with the index
   EvolvedStates=matrix(0,nrow=0,ncol=2*n)
   PenaltyForPath=vector(length=0)
@@ -266,11 +291,15 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
       #Actions
       Actions=AdjacencyMatrix[CurrentNode,]
       
-      NodeIndexes=IndicesForNodes(n,IndexForNodeFunction,sVec,vVec,CostVec,LambdaVec,bVec,xVec,vMaxVec)
-      
-      IndexForActions= Actions * NodeIndexes
-      
-      PenaltyForAction=rep(sum(IndexForActions),length(Actions))-IndexForActions
+      PenaltyForAction=vector(length=length(Actions))
+      for(action in 1:length(PenaltyForAction))
+      {
+        PenaltyForAction[action]=0
+        if(Actions[action]!=1)
+        {
+          PenaltyForAction[action]=IndexFromListReader(action,sVec[action],vVec[action],IndexList)
+        }
+      }
       
       #Form Paths
       for(action in 1:n)
@@ -278,6 +307,9 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
         if(Actions[action]==1)
         {
           Paths=rbind(Paths,c(action,rep(0,NoSteps-1)))
+          PathEvolved=rep(F,n)
+          PathEvolved[action]=T
+          HasVEvolved=rbind(HasVEvolved,PathEvolved)
           NewsVec=NewSState(sVec,action,BVec)
           EvolvedStates=rbind(EvolvedStates,c(NewsVec,NewMeanVState(vVec,NewsVec,action,BVec,bVec,LambdaVec)))
           PenaltyForPath=c(PenaltyForPath,PenaltyForAction[action])
@@ -306,10 +338,12 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
     {
       #We need to copy and expand each
       OldPaths=Paths
+      OldHasVEvolved=HasVEvolved
       OldEvolvedStates=EvolvedStates
       OldPenaltyForPath=PenaltyForPath
       
       Paths=matrix(0,nrow=0,ncol=NoSteps)
+      HasVEvolved=matrix(0,nrow=0,ncol=n)
       EvolvedStates=matrix(0,nrow=0,ncol=2*n)
       PenaltyForPath=vector(length=0)
       
@@ -319,11 +353,23 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
         #for each row we expand it to allow all possible actions
         Actions=AdjacencyMatrix[OldPaths[row,Step-1],]
         
-        NodeIndexes=IndicesForNodes(n,IndexForNodeFunction,OldEvolvedStates[row,1:n],OldEvolvedStates[row,(n+1):(2*n)],CostVec,LambdaVec,bVec,xVec,vMaxVec)
-        
-        IndexForActions= Actions * NodeIndexes
-        
-        PenaltyForAction=rep(sum(IndexForActions),length(Actions))-IndexForActions
+        PenaltyForAction=vector(length=length(Actions))
+        for(action in 1:length(PenaltyForAction))
+        {
+          PenaltyForAction[action]=0
+          if(Actions[action]!=1)
+          {
+            #To find the benefit of the action we use normal if we have not evolved v , otherwise use average
+            if(OldHasVEvolved[row,action]==F)
+            {
+              PenaltyForAction[action]=IndexFromListReader(action,OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action],IndexList)
+            }
+            if(OldHasVEvolved[row,action]==T)
+            {
+              PenaltyForAction[action]=AverageIndexFromListReader(action,OldEvolvedStates[row,1:n][action],OldEvolvedStates[row,(n+1):(2*n)][action],IndexList,LambdaVec[action],bVec[action])
+            }
+          }
+        }
         
         #Form Paths
         for(action in 1:n)
@@ -331,6 +377,9 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
           if(Actions[action]==1)
           {
             Paths=rbind(Paths,c(OldPaths[row,1:(Step-1)],action,rep(0,NoSteps-Step)))
+            PathEvolved=rep(F,n)
+            PathEvolved[action]=T
+            HasVEvolved=rbind(HasVEvolved,PathEvolved)
             NewsVec=NewSState(OldEvolvedStates[row,1:n],action,BVec)
             EvolvedStates=rbind(EvolvedStates,c(NewsVec,NewMeanVState(OldEvolvedStates[row,(n+1):(2*n)],NewsVec,action,BVec,bVec,LambdaVec)))
             PenaltyForPath=c(PenaltyForPath,OldPenaltyForPath[row]+PenaltyForAction[action])
@@ -366,12 +415,12 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
   {
     #We compute the average cost of following such a strategy to decide which paths to pick
     #We use determinsitic evolution to the mean state in v
-    DeterministicGen=DeterministicCostEvaluationOfPath(BestPathforStep[i,],n,sVec,vVec,CostVec,LambdaVec,bVec,xVec,vMaxVec,CostToProgressList)
+    DeterministicGen=DeterministicCostEvaluationOfPath(BestPathforStep[i,],n,sVec,vVec,CostVec,LambdaVec,BVec,bVec,CostToProgressArrivalsList,CostToProgressObsList)
     AverageCostForPath[i]=DeterministicGen$Average
     #For each Path we have have end point
     EndOfPathState=DeterministicGen$NewMeanSVState
     #From this work out the average cost to decay
-    AverageCostForPath[i]=AverageCostForPath[i]+DecayToEndCost(n,EndOfPathState[1:n],EndOfPathState[(n+1):(2*n)],CostVec,LambdaVec,bVec,xVec)
+    AverageCostForPath[i]=AverageCostForPath[i]+DecayToEndCost(n,EndOfPathState[1:n],EndOfPathState[(n+1):(2*n)],CostVec,LambdaVec,bVec,BVec,AttackCDFVec,CostToProgressList)
     
     
   }
@@ -392,38 +441,35 @@ MultiStepPenaltyHeuristic<-function(NoSteps,n,AdjacencyMatrix,IndexForNodeFuncti
 }
 
 
-StartingNodeHeuristic<-function(n,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,vMaxVec=NULL)
+StartingNodeHeuristic<-function(n,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList=NULL,
+                                CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL,PrintOutput=FALSE)
 {
-  if(is.null(vMaxVec))
-  {
-    #Create vMaxVec
-    vMaxVec=CreateVMaxVector(n,LambdaVec,bVec,xVec)
-  }
-  
-  #Elapsed state, we will consider the indices when we have not visited in a very long time.
-  StartingSVec=ceiling(xVec)+1
-  #and we will assume that all v's are in their mean state.
-  StartingVVec=vector(length=n)
+  #To decide a starting node we work out the index for all nodes (when S is maximum) and pick the biggest
+  #form vector of indices for nodes.
+  Indices=vector(length=n)
   for(i in 1:n)
   {
-    # StartingVVec[i]=TruncPoissionMean(LambdaVec[i],bVec[i])
-    StartingVVec[i]=0
+    Indices[i]=IndexList[[i]][nrow(IndexList[[i]]),1]
   }
-
-  #To decide a starting node we work out the index for all nodes (when S is maximum) and pick the biggest
-  NodeIndexes=IndicesForNodes(n,IndexForNodeFunction,StartingSVec,StartingVVec,CostVec,LambdaVec,bVec,xVec,vMaxVec)
-  print("Here")
-  BestStart=which.max(NodeIndexes)
+  BestStart=which.max(Indices)
   return(BestStart)
 }
 
-HeuristicPolicy<-function(HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,StateSpace=NULL,vMaxVec=NULL,PrintOutput=FALSE)
+HeuristicPolicy<-function(HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,StateSpace=NULL,CostToProgressList=NULL,
+                          CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL,PrintOutput=FALSE)
 {
-  BVec=ceiling(xVec)
   Policy=list()
   if(is.null(StateSpace))
   {
     StateSpace=CreateSVStates(n,BVec,bVec)
+  }
+  
+  if(is.null(CostToProgressList) || is.null(CostToProgressArrivalsList) || is.null(CostToProgressObsList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+    CostToProgressArrivalsList=CreatedCostLists$CostToProgressArrivalsList
+    CostToProgressObsList=CreatedCostLists$CostToProgressObsList
   }
   
   #For each state we will apply our algorithm to get a policy
@@ -435,7 +481,8 @@ HeuristicPolicy<-function(HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,Ind
     {
       print(State)
     }
-    MoveToNode=HeuristicFunction(HeuristicDepth,n,AdjacencyMatrix,IndexForNodeFunction,State[1:n],State[(n+1):(2*n)],CostVec,LambdaVec,bVec,xVec,vMaxVec)
+    MoveToNode=HeuristicFunction(HeuristicDepth,n,AdjacencyMatrix,IndexList,State[1:n],State[(n+1):(2*n)],CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList,
+                                 CostToProgressArrivalsList,CostToProgressObsList)
     
     #We record in a list the policy
     Policy[[StateNumber]]=MoveToNode

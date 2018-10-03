@@ -210,9 +210,9 @@ TruncatedNormalPDFGenerator<-function(mean,sd,a,b)
   return(TruncNormalPDF)
 }
 
-TruncatedNormalTest1PDF=TruncatedNormalPDFGenerator(1.7,0.1,0,3.7)
+TruncatedNormalTest1PDF=TruncatedNormalPDFGenerator(1.7,0.3,0,3.7)
 TruncatedNormalTest1CDF=GenerateCDF(TruncatedNormalTest1PDF)
-TruncatedNormalTest2PDF=TruncatedNormalPDFGenerator(3.2,0.1,0,3.7)
+TruncatedNormalTest2PDF=TruncatedNormalPDFGenerator(3.2,0.3,0,3.7)
 TruncatedNormalTest2CDF=GenerateCDF(TruncatedNormalTest2PDF)
 
 

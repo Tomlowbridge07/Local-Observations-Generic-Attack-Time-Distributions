@@ -576,11 +576,16 @@ source("General attack solver.R")
 CreateCostToProgressList<-function(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
 {
   CostToProgressList=list()
+  CostToProgressArrivalsList=list()
+  CostToProgressObsList=list()
   for(i in 1:length(AttackCDFVec))
   {
-    CostToProgressList[[i]]=GenerateCostToProgressMatrix(BVec[i]+1,bVec[i]+1,CostVec[i],LambdaVec[i],AttackCDFVec[[i]])
+    Matrices=GenerateCostToProgressMatrix(BVec[i]+1,bVec[i]+1,CostVec[i],LambdaVec[i],AttackCDFVec[[i]])
+    CostToProgressList[[i]]=Matrices$CostToProgressMatrix
+    CostToProgressArrivalsList[[i]]=Matrices$CostDueToArrivals
+    CostToProgressObsList[[i]]=Matrices$CostDueToObs
   }
-  return(CostToProgressList)
+  return(list(CostToProgressList=CostToProgressList,CostToProgressArrivalsList=CostToProgressArrivalsList,CostToProgressObsList=CostToProgressObsList))
 }
 
 #Rewriting Cost of action function
@@ -598,6 +603,22 @@ CostOfAction<-function(StateVector,NodeToMoveTo,n,CostToProgressList)
   return(Cost)
 }
 
+SeperatedCostOfAction<-function(StateVector,NodeToMoveTo,n,CostToProgressArrivalsList,CostToProgressObsList)
+{
+  #We add up all costs incurred when we progress. That is all costs of other nodes
+  CostArr=0
+  CostObs=0
+  for(i in 1:length(CostToProgressArrivalsList))
+  {
+    if(i!=NodeToMoveTo)
+    {
+      CostArr=CostArr+CostToProgressArrivalsList[[i]][StateVector[i],StateVector[i+n]+1]
+      CostObs=CostObs+CostToProgressObsList[[i]][StateVector[i],StateVector[i+n]+1]
+    }
+  }
+  return(list(CostDueToArrivals=CostArr,CostDueToObserved=CostObs))
+}
+
 CostToNeglect<-function(StateVector,n,CostToProgressList)
 {
   
@@ -605,13 +626,33 @@ CostToNeglect<-function(StateVector,n,CostToProgressList)
   return(CostOfAction(StateVector,-1,n,CostToProgressList))
 }
 
+#Cost from non integer obs, the program expects this in the statevector 
+CostOfActionFromNonIntergerObs<-function(StateVector,NodeToMoveTo,n,CostToProgressArrivalsList,CostToProgressObsList)
+{
+  #We add up all costs incurred when we progress. That is all costs of other nodes
+  Cost=0
+  for(i in 1:length(CostToProgressArrivalsList))
+  {
+    if(i!=NodeToMoveTo)
+    {
+      #Add cost due to arrivals
+      Cost=Cost+CostToProgressArrivalsList[[i]][StateVector[i],StateVector[i+n]+1]
+      
+      #Add cost due to obs by subtracting (for col increase value)
+      CostDueToObsForNode=CostToProgressObsList[[i]][StateVector[i],2]-CostToProgressObsList[[i]][StateVector[i],1]
+      
+      Cost=Cost+StateVector[i+n]*CostDueToObsForNode
+    }
+  }
+  return(Cost)
+}
   
 #create for a state the constraint matrix parts for a particular state
 CreateConstraintMatrixForState<-function(StateVector,AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,CostToProgressList=NULL,SVStateSpace=NULL)
 {
   if(is.null(CostToProgressList))
   {
-    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)$CostToProgressMatrix
     print(CostToProgressList)
   }
   if(is.null(SVStateSpace))
@@ -678,7 +719,7 @@ CreateConstraintMatrix<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec
 {
   #Create the Cost to progress list
   print("Constructing Cost to progress list")
-  CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+  CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)$CostToProgressList
   print("Constructed")
   print(CostToProgressList)
   #We now repeat for each possible state the construction and bind together
@@ -1012,7 +1053,7 @@ CreateDualSetup<-function(AdjMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec,C
 {
   if(is.null(CostToProgressList))
   {
-    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)$CostToProgressList
   }
   if(is.null(SVStateSpace))
   {

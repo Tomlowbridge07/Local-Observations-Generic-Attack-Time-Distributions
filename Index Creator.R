@@ -68,10 +68,10 @@ FindSwappingPoint<-function(RenewInMatrix1,RenewInMatrix2,CostsToProgress,Lambda
 }
 
 #Return w* for every state. We choose to ignore later ones.
-FindIndexMatrix<-function(OmegaStepSize,AttackTimeDistribution,B,b,Cost,Lambda,MinTolerance,MaxSteps,TypeOfAttackTimeDis="CDF")
+FindSimpleIndexMatrix<-function(OmegaStepSize,AttackTimeDistribution,B,b,Cost,Lambda,MinTolerance,MaxSteps,TypeOfAttackTimeDis="CDF")
 {
   #We'll generate the cost to progress matrix for later use
-  CostToProgress=GenerateCostToProgressMatrix(B+1,b+1,Cost,Lambda,AttackTimeDistribution)
+  CostToProgress=GenerateCostToProgressMatrix(B+1,b+1,Cost,Lambda,AttackTimeDistribution)$CostToProgressMatrix
   
   #We first solve to the boundary
   print("Solving for each omega")
@@ -109,6 +109,49 @@ FindIndexMatrix<-function(OmegaStepSize,AttackTimeDistribution,B,b,Cost,Lambda,M
   
   return(list(IndexMatrix=IndexMatrix,BoundaryHitValue=BoundaryHitValue))
 }
+
+FindIndexMatrix<-function(OmegaStepSize,AttackTimeDistribution,B,b,Cost,Lambda,MinTolerance,MaxSteps,TypeOfAttackTimeDis="CDF")
+{
+  #We'll generate the cost to progress matrix for later use
+  CostToProgress=GenerateCostToProgressMatrix(B+1,b+1,Cost,Lambda,AttackTimeDistribution)$CostToProgressMatrix
+  
+  #We first solve to the boundary
+  print("Solving for each omega")
+  SolvedOE=SolveForMultipleOmegaUntilBoundary(OmegaStepSize,AttackTimeDistribution,B,b,Cost,Lambda,TypeOfAttackTimeDis="CDF")
+  
+  #Retrive the plans
+  Plans=SolvedOE$Plans
+  PlansChangingPoints=SolvedOE$PlansChangingPoints
+  
+  print("Creating Index Matrix")
+  #Index matrix for w*'s to be put into.
+  IndexMatrix=matrix(nrow=B+1,ncol=b+1)
+  
+  #Then for each plan change we will find what states change and what.
+  #Note. The last Plan is past the boundary
+  for(i in 1:(length(Plans)-1))
+  {
+    #Find w*
+    OmegaStar=FindSwappingPoint(Plans[[i]],Plans[[i+1]],CostToProgress,Lambda,PlansChangingPoints[i],PlansChangingPoints[i+1],MinTolerance,MaxSteps)
+    
+    #print(OmegaStar)
+    
+    #Find what elements have changed in the plan
+    for(element in 1:length(Plans[[i]]))
+    {
+      if(Plans[[i]][element]==0 && Plans[[i+1]][element]!=0)
+      {
+        IndexMatrix[element]=OmegaStar
+      }
+    }
+  }
+  
+  #We pass the boundary hit value on
+  BoundaryHitValue=SolvedOE$BoundaryHitValue
+  
+  return(list(IndexMatrix=IndexMatrix,BoundaryHitValue=BoundaryHitValue))
+}
+
 
 #This function alters the index matrix to have a 
 AlterIndexMatrix<-function(IndexMatrix,IndexCap,IgnoreIndexibility=F)

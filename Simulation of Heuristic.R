@@ -28,7 +28,8 @@ CreateSimulationScenario<-function(NoSteps,n,LambdaVec)
 #   return(NewvVec)
 # }
 
-SimulationForEvolution<-function(NumberOfRunSteps,HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,BurnOut=0,SimulationScenario=NULL,vMaxVec=NULL)
+SimulationForEvolution<-function(NumberOfRunSteps,HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,BurnOut=0,
+                                 SimulationScenario=NULL,CostToProgressList=NULL,CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL)
 {
   #Set up simulation matrix and tracking
   if(is.null(SimulationScenario))
@@ -36,16 +37,16 @@ SimulationForEvolution<-function(NumberOfRunSteps,HeuristicDepth,HeuristicFuncti
     SimulationScenario=CreateSimulationScenario(NumberOfRunSteps,n,LambdaVec)
   }
   
+  if(is.null(CostToProgressList) || is.null(CostToProgressArrivalsList) || is.null(CostToProgressObsList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+    CostToProgressArrivalsList=CreatedCostLists$CostToProgressArrivalsList
+    CostToProgressObsList=CreatedCostLists$CostToProgressObsList
+  }
+  
   #This vector tracks which column to currently use in each row
   TrackingScenario=rep(1,n)
-  
-  
-  BVec=ceiling(xVec)
-  if(is.null(vMaxVec))
-  {
-    #Create vMaxVec
-    vMaxVec=CreateVMaxVector(n,LambdaVec,bVec,xVec)
-  }
   
   RunCost=vector(length=NumberOfRunSteps)
   SeperatedRunCost=matrix(0,nrow=NumberOfRunSteps,ncol=2)
@@ -58,7 +59,8 @@ SimulationForEvolution<-function(NumberOfRunSteps,HeuristicDepth,HeuristicFuncti
     if(run==0)
     {
       #Set up initial States
-      StartNode=StartingNodeHeuristic(n,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,vMaxVec)
+      StartNode=StartingNodeHeuristic(n,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList,
+                                      CostToProgressArrivalsList,CostToProgressObsList)
       
       print(paste("Starting at ",toString(StartNode)))
       
@@ -97,13 +99,14 @@ SimulationForEvolution<-function(NumberOfRunSteps,HeuristicDepth,HeuristicFuncti
       
       
       #decide where to move to using heuristic
-      MoveToNode=HeuristicFunction(HeuristicDepth,n,AdjacencyMatrix,IndexForNodeFunction,OldsVec,OldvVec,CostVec,LambdaVec,bVec,xVec,vMaxVec)
+      MoveToNode=HeuristicFunction(HeuristicDepth,n,AdjacencyMatrix,IndexList,OldsVec,OldvVec,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList,
+                                   CostToProgressArrivalsList,CostToProgressObsList)
       print(paste("Choosing to move to",toString(MoveToNode)))
       
       #Calculate cost of doing such an action
-      RunCost[run]=CostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostVec,xVec,LambdaVec)
-      SeperatedRunCost[run,1]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostVec,xVec,LambdaVec)$CostDueToArrivals
-      SeperatedRunCost[run,2]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostVec,xVec,LambdaVec)$CostDueToObserved
+      RunCost[run]=CostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostToProgressList)
+      SeperatedRunCost[run,1]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostToProgressArrivalsList,CostToProgressObsList)$CostDueToArrivals
+      SeperatedRunCost[run,2]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostToProgressArrivalsList,CostToProgressObsList)$CostDueToObserved
       if(run==1)
       {
         CumulativeSeperatedRunCost[run,1]=SeperatedRunCost[run,1]
@@ -207,7 +210,8 @@ CompareSimulationInfoToPolicy<-function(FullInfo,ActionPolicy,StateSpace,BVec)
 
 #Similar to Simulation but runs using a given polciy (note it will be of list form, we will use the first choice)
 #Note the index function is used to determine the starting node of the scenario
-RunPolicyForScenario<-function(NumberOfRunSteps,Policy,n,AdjacencyMatrix,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,SimulationScenario,StateSpace=NULL,vMaxVec=NULL)
+RunPolicyForScenario<-function(NumberOfRunSteps,Policy,n,AdjacencyMatrix,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,SimulationScenario,StateSpace=NULL,
+                               CostToProgressList=NULL,CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL)
 {
   #Set up simulation matrix and tracking
   if(is.null(SimulationScenario))
@@ -222,12 +226,12 @@ RunPolicyForScenario<-function(NumberOfRunSteps,Policy,n,AdjacencyMatrix,IndexFo
     StateSpace=CreateSVStates(n,BVec,bVec)
   }
   
-  
-  
-  if(is.null(vMaxVec))
+  if(is.null(CostToProgressList) || is.null(CostToProgressArrivalsList) || is.null(CostToProgressObsList))
   {
-    #Create vMaxVec
-    vMaxVec=CreateVMaxVector(n,LambdaVec,bVec,xVec)
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+    CostToProgressArrivalsList=CreatedCostLists$CostToProgressArrivalsList
+    CostToProgressObsList=CreatedCostLists$CostToProgressObsList
   }
   
   RunCost=vector(length=NumberOfRunSteps)
@@ -242,7 +246,8 @@ RunPolicyForScenario<-function(NumberOfRunSteps,Policy,n,AdjacencyMatrix,IndexFo
     {
       #Set up initial States
       #This is set up as before even though we are running a policy
-      StartNode=StartingNodeHeuristic(n,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,vMaxVec)
+      StartNode=StartingNodeHeuristic(n,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,CostToProgressList,
+                                                            CostToProgressArrivalsList,CostToProgressObsList)
       
       print(paste("Starting at ",toString(StartNode)))
       
@@ -285,9 +290,9 @@ RunPolicyForScenario<-function(NumberOfRunSteps,Policy,n,AdjacencyMatrix,IndexFo
       print(paste("Choosing to move to",toString(MoveToNode)))
       
       #Calculate cost of doing such an action
-      RunCost[run]=CostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostVec,xVec,LambdaVec)
-      SeperatedRunCost[run,1]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostVec,xVec,LambdaVec)$CostDueToArrivals
-      SeperatedRunCost[run,2]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostVec,xVec,LambdaVec)$CostDueToObserved
+      RunCost[run]=CostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostToProgressList)
+      SeperatedRunCost[run,1]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostToProgressArrivalsList,CostToProgressObsList)$CostDueToArrivals
+      SeperatedRunCost[run,2]=SeperatedCostOfAction(c(OldsVec,OldvVec),MoveToNode,n,CostToProgressArrivalsList,CostToProgressObsList)$CostDueToObserved
       if(run==1)
       {
         CumulativeSeperatedRunCost[run,1]=SeperatedRunCost[run,1]
@@ -329,7 +334,8 @@ RunPolicyForScenario<-function(NumberOfRunSteps,Policy,n,AdjacencyMatrix,IndexFo
   return(list(Average=AverageCost,CostForStep=RunCost,SeperatedCostForStep=SeperatedRunCost,CumulativeSeperatedCostForStep=CumulativeSeperatedRunCost,FullInfoMatrix=AllInfo))
 }
 
-SimulationExperiment<-function(NumberOfTrials,NumberOfRunSteps,HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,vMaxVec=NULL)
+SimulationExperiment<-function(NumberOfTrials,NumberOfRunSteps,HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,
+                               CostToProgressList=NULL,CostToProgressArrivalsList=NULL,CostToProgressObsList=NULL)
 {
  #We repeat the simulation
   RunningCostMatrix=matrix(0,nrow = 0,ncol=NumberOfRunSteps)
@@ -337,7 +343,9 @@ SimulationExperiment<-function(NumberOfTrials,NumberOfRunSteps,HeuristicDepth,He
   
   for(trial in 1:NumberOfTrials)
   {
-   Simulation=SimulationForEvolution(NumberOfRunSteps,HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec)
+    
+   Simulation=SimulationForEvolution(NumberOfRunSteps,HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,BurnOut=0,
+                                     SimulationScenario=NULL,CostToProgressList,CostToProgressArrivalsList,CostToProgressObsList)
    RunningCostMatrix=rbind(RunningCostMatrix,Simulation$CostForStep)
    AveragecostVec[trial]=Simulation$Average
    #print(RunningCostMatrix)

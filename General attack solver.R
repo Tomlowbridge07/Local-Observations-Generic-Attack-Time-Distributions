@@ -66,7 +66,7 @@ GenerateCDF<-function(AttackTimePDFDistribution,Type="Continuous")
 
 #Generate the cost to progress matrix
 #Note. NumRow is B+1, NumCol=b+1
-GenerateCostToProgressMatrix<-function(NumRow,NumCol,Cost,Lambda,AttackTimeCDFDistribution)
+GenerateSimpleCostToProgressMatrix<-function(NumRow,NumCol,Cost,Lambda,AttackTimeCDFDistribution)
 {
   CostToProgressMatrix=matrix(nrow=NumRow,ncol=NumCol)
   for(i in 1:NumRow)
@@ -82,6 +82,29 @@ GenerateCostToProgressMatrix<-function(NumRow,NumCol,Cost,Lambda,AttackTimeCDFDi
     }
   }
   return(CostToProgressMatrix)
+}
+
+#This Generates the cost to progression matrices for arrivals and observed
+GenerateCostToProgressMatrix<-function(NumRow,NumCol,Cost,Lambda,AttackTimeCDFDistribution)
+{
+  CostToProgressMatrix=matrix(nrow=NumRow,ncol=NumCol)
+  CostDueToArrivalsMatrix=matrix(nrow=NumRow,ncol=NumCol)
+  CostDueToObsMatrix=matrix(nrow=NumRow,ncol=NumCol)
+  for(i in 1:NumRow)
+  {
+    #We can find the arrivals during this time period
+    CostDueToArrivals= Cost * Lambda * integrate(Vectorize(AttackTimeCDFDistribution),i-1,i)$value
+    
+    for(j in 1:NumCol)
+    {
+      CostDueToObs= Cost * (j-1) * (AttackTimeCDFDistribution(i)-AttackTimeCDFDistribution(i-1))
+      
+      CostDueToArrivalsMatrix[i,j]=CostDueToArrivals
+      CostDueToObsMatrix[i,j]=CostDueToObs
+      CostToProgressMatrix[i,j]=CostDueToArrivals+CostDueToObs
+    }
+  }
+  return(list(CostToProgressMatrix=CostToProgressMatrix,CostDueToArrivalsMatrix=CostDueToArrivalsMatrix,CostDueToObsMatrix=CostDueToObsMatrix))
 }
 
 #This function returns how long to wait to renew

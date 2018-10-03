@@ -2,17 +2,22 @@ source("Optimal solution by LP.R")
 
 #Function to work out the value for a particular number of steps
 #Expects states to be passed as a matrix (with rows being a state with s_1 , s_2,...,s_n,v_1,...,v_2)
-ValueFunction<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PriorValueFunction=NULL,PriorActionsMatrix=NULL,PrintOutput=FALSE)
+ValueFunction<-function(Steps,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,PriorValueFunction=NULL,PriorActionsMatrix=NULL,CostToProgressList=NULL,PrintOutput=FALSE)
 {
   StateSpaceSize=nrow(StateSpace)
   n=nrow(AdjacencyMatrix)
-  BVec=ceiling(xVec)
   
   #Stores the value of this iteration
   ValueVector=rep(0,StateSpaceSize)
   
   #Store a list of actions for this iteration
   AddOnActionsMatrix=matrix(list(),nrow=1,ncol=StateSpaceSize)
+  
+  if(is.null(CostToProgressList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+  }
   
   if(Steps==0) #Base case
   {
@@ -23,7 +28,7 @@ ValueFunction<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,Lambd
     #Work out previous step
     if(is.null(PriorValueFunction) || is.null(PriorActionsMatrix))
     {
-      Prior=ValueFunction(Steps-1,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec)
+      Prior=ValueFunction(Steps-1,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,CostToProgressList = CostToProgressList)
       PriorValueFunction=Prior$Values
       PriorActionsMatrix=Prior$Actions
     }
@@ -48,7 +53,7 @@ ValueFunction<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,Lambd
         
         if(AdjacencyMatrix[CurrentNode,option]==1)
         {
-          OptionsVector[option]=CostOfAction(CurrentState,option,n,CostVec,xVec,LambdaVec) #Cost of action
+          OptionsVector[option]=CostOfAction(CurrentState,option,n,CostToProgressList) #Cost of action
           
           #We now add the expected future cost, this means a proportion for each possible v state we can transistion to by taking this action
           #We can retrive the probability and states from a function
@@ -91,12 +96,18 @@ ValueFunction<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,Lambd
   return(list(Values=ValueVector,Actions=ActionsMatrix))
 }
 
-ValueIteration<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PrintOutput=FALSE)
+ValueIteration<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,CostToProgressList=NULL,PrintOutput=FALSE)
 {
+  if(is.null(CostToProgressList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+  }
+  
   step=1
   BoundWidthError=Tolerance+1
-  PriorValueFunction=ValueFunction(0,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec)$Values
-  PriorActionsMatrix=ValueFunction(0,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec)$Actions
+  PriorValueFunction=ValueFunction(0,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,CostToProgressList = CostToProgressList)$Values
+  PriorActionsMatrix=ValueFunction(0,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,CostToProgressList = CostToProgressList)$Actions
   while(step<=MaxNoSteps && BoundWidthError>=Tolerance)
   {
     if(PrintOutput)
@@ -106,7 +117,7 @@ ValueIteration<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bV
    
     
     #Work out the value vector for this number of steps
-    New=ValueFunction(step,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PriorValueFunction,PriorActionsMatrix)
+    New=ValueFunction(step,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,PriorValueFunction,PriorActionsMatrix,CostToProgressList = CostToProgressList)
     NewValueFunction=New$Values
     NewActionsMatrix=New$Actions
 
@@ -152,15 +163,17 @@ ValueIteration<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bV
   }
 }
 
-ValueIterationForGame<-function(MaxNoSteps,Tolerance,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PrintOutput=FALSE)
+ValueIterationForGame<-function(MaxNoSteps,Tolerance,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,PrintOutput=FALSE)
 {
   #Set up games statespace
-  BVec=ceiling(xVec)
   n=nrow(AdjacencyMatrix)
   StateSpace=CreateSVStates(n,BVec,bVec)
+  #Find Cost
+  CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+  CostToProgressList=CreatedCostLists$CostToProgressList  
   
   #Solve the iteration
-  ValueIt=ValueIteration(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PrintOutput)
+  ValueIt=ValueIteration(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,CostToProgressList,PrintOutput)
   LowerBound=ValueIt$LowerBound
   UpperBound=ValueIt$UpperBound
   ActionsMatrix=ValueIt$Actions
