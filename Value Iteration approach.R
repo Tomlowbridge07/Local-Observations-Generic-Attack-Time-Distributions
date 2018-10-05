@@ -185,11 +185,16 @@ ValueIterationForGame<-function(MaxNoSteps,Tolerance,AdjacencyMatrix,BVec,bVec,C
 }
 
 #This function works out the value function for a particular policy.
-ValueFunctionForPolicy<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Policy,PriorValueFunction=NULL,PrintOutput=FALSE)
+ValueFunctionForPolicy<-function(Steps,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,Policy,CostToProgressList=NULL,PriorValueFunction=NULL,PrintOutput=FALSE)
 {
+  if(is.null(CostToProgressList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+  }  
+  
   StateSpaceSize=nrow(StateSpace)
   n=nrow(AdjacencyMatrix)
-  BVec=ceiling(xVec)
   
   #Stores the value of this iteration
   ValueVector=rep(0,StateSpaceSize)
@@ -217,7 +222,7 @@ ValueFunctionForPolicy<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,Cost
       EvolvedStates=Evolved$State
       EvolvedStatesProb=Evolved$Prob
       
-      ValueVector[state]=CostOfAction(CurrentState,ActionTaken,n,CostVec,xVec,LambdaVec) 
+      ValueVector[state]=CostOfAction(CurrentState,ActionTaken,n,CostToProgressList) 
           
           for(i in 1:nrow(EvolvedStates))
           {
@@ -233,8 +238,14 @@ ValueFunctionForPolicy<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,Cost
   return(ValueVector)
 }
 
-ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Policy,PrintOutput=FALSE)
+ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,AttackCDFVec,Policy,CostToProgressList=NULL,PrintOutput=FALSE)
 {
+  if(is.null(CostToProgressList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+  } 
+  
   step=1
   BoundWidthError=Tolerance+1
   PriorValueFunction=ValueFunctionForPolicy(0,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Policy)
@@ -247,7 +258,7 @@ ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatri
     
     
     #Work out the value vector for this number of steps
-    NewValueFunction=ValueFunctionForPolicy(step,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Policy,PriorValueFunction)
+    NewValueFunction=ValueFunctionForPolicy(step,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,Policy,CostToProgressList,PriorValueFunction)
     
     #For this state calcluate min and max for all states
     CostBetweenSteps=NewValueFunction-PriorValueFunction
@@ -301,8 +312,17 @@ ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatri
 #Function to work out the value for a particular number of steps
 #Expects states to be passed as a matrix (with rows being a state with s_1 , s_2,...,s_n,v_1,...,v_2)
 #Note. This function has perfect foresight
-ValueFunctionForScenario<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Scenario,PriorTrackingMatrix=NULL,PriorValueFunction=NULL,PriorActionsMatrix=NULL)
+ValueFunctionForScenario<-function(Steps,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,Scenario,CostToProgressList=NULL,
+                                   PriorTrackingMatrix=NULL,PriorValueFunction=NULL,PriorActionsMatrix=NULL)
 {
+  
+  if(is.null(CostToProgressList))
+  {
+    CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+    CostToProgressList=CreatedCostLists$CostToProgressList
+  } 
+  
+  
   n=ncol(StateSpace)/2
   StateSpaceSize=nrow(StateSpace)
   
@@ -311,7 +331,6 @@ ValueFunctionForScenario<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,Co
   
   
   n=nrow(AdjacencyMatrix)
-  BVec=ceiling(xVec)
   
   #Stores the value of this iteration
   ValueVector=rep(0,StateSpaceSize)
@@ -357,7 +376,7 @@ ValueFunctionForScenario<-function(Steps,StateSpace,AdjacencyMatrix,xVec,bVec,Co
         
         if(AdjacencyMatrix[CurrentNode,option]==1)
         {
-          OptionsVector[option]=CostOfAction(CurrentState,option,n,CostVec,xVec,LambdaVec) #Cost of action
+          OptionsVector[option]=CostOfAction(CurrentState,option,n,CostToProgressList) #Cost of action
           
           #We now add the expected future cost, this means a proportion for each possible v state we can transistion to by taking this action
           #We can retrive the probability and states from a function
