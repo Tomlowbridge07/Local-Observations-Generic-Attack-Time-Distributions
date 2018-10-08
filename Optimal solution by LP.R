@@ -635,13 +635,20 @@ CostOfActionFromNonIntergerObs<-function(StateVector,NodeToMoveTo,n,CostToProgre
   {
     if(i!=NodeToMoveTo)
     {
-      #Add cost due to arrivals
-      Cost=Cost+CostToProgressArrivalsList[[i]][StateVector[i],StateVector[i+n]+1]
+      if(ncol(CostToProgressObsList[[i]])==1)
+      {
+        #Add arrivals
+        Cost=Cost+CostToProgressArrivalsList[[i]][StateVector[i],StateVector[i+n]+1]
+      }
+      else
+      {
+       #Add cost due to arrivals
+       Cost=Cost+CostToProgressArrivalsList[[i]][StateVector[i],StateVector[i+n]+1]
       
-      #Add cost due to obs by subtracting (for col increase value)
-      CostDueToObsForNode=CostToProgressObsList[[i]][StateVector[i],2]-CostToProgressObsList[[i]][StateVector[i],1]
-      
-      Cost=Cost+StateVector[i+n]*CostDueToObsForNode
+       #Add cost due to obs by subtracting (for col increase value)
+       CostDueToObsForNode=CostToProgressObsList[[i]][StateVector[i],2]-CostToProgressObsList[[i]][StateVector[i],1]
+       Cost=Cost+StateVector[i+n]*CostDueToObsForNode
+      }
     }
   }
   return(Cost)

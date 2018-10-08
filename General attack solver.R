@@ -110,7 +110,7 @@ GenerateCostToProgressMatrix<-function(NumRow,NumCol,Cost,Lambda,AttackTimeCDFDi
 #This function returns how long to wait to renew
 FindRenewInRow<-function(CurrentRowNum,EquilibriumCost,NextRowRenewIn,CostsToProgress)
 {
-  CurrentRowRenewIn=vector(length=length(NextRowRenewIn))
+ CurrentRowRenewIn=vector(length=length(NextRowRenewIn))
  for(j in 1:length(NextRowRenewIn))
  {
    #For element in our row we calculate and check the inequaility (number of g's vs cost)
@@ -121,7 +121,9 @@ FindRenewInRow<-function(CurrentRowNum,EquilibriumCost,NextRowRenewIn,CostsToPro
    CostIfNotRenew=CostIfNotRenew+CostsToProgress[CurrentRowNum+(i-1),j]
   }
   
+  #print("Cost to renew is:")
   #print(CostIfRenew)
+  #print("Cost to not renew is:")
   #print(CostIfNotRenew)
   
   #Compare and decide
@@ -144,6 +146,9 @@ FindRenewInRow<-function(CurrentRowNum,EquilibriumCost,NextRowRenewIn,CostsToPro
 #This function returns a matrix for each state of how long to wait till renew
 FindRenewInMatrix<-function(EquilibriumCost,CostsToProgress)
 {
+  #print("Using equilibrium cost of:")
+  #print(EquilibriumCost)
+  
   RenewInMatrix=matrix(nrow=nrow(CostsToProgress),ncol=ncol(CostsToProgress))
   for(rownum in nrow(CostsToProgress):1)
   {
@@ -187,8 +192,8 @@ FindEquilibriumValue<-function(RenewInMatrix,CostsToProgress,Lambda,Omega)
       CostForCol[j]=Omega
     }
     
-    ExpectedContributionForCol[j]=TruncPoissonPMF(Lambda,length(RenewIn)-1,j) * CostForCol[j]
-    ExpectedRenewalLengthContribution[j]=TruncPoissonPMF(Lambda,length(RenewIn)-1,j) * (RenewIn[j]+1)
+    ExpectedContributionForCol[j]=TruncPoissonPMF(Lambda,length(RenewIn)-1,j-1) * CostForCol[j]
+    ExpectedRenewalLengthContribution[j]=TruncPoissonPMF(Lambda,length(RenewIn)-1,j-1) * (RenewIn[j]+1)
   }
   ExpectedCostPerRenewal=sum(ExpectedContributionForCol)
   ExpectedRenewalLength=sum(ExpectedRenewalLengthContribution)

@@ -209,7 +209,7 @@ ValueFunctionForPolicy<-function(Steps,StateSpace,AdjacencyMatrix,BVec,bVec,Cost
     #Work out previous step
     if(is.null(PriorValueFunction))
     {
-      PriorValueFunction=ValueFunctionForPolicy(Steps-1,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Policy)
+      PriorValueFunction=ValueFunctionForPolicy(Steps-1,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,Policy)
     }
     
     #Form a vector from which to take the minimum for all states
@@ -238,17 +238,16 @@ ValueFunctionForPolicy<-function(Steps,StateSpace,AdjacencyMatrix,BVec,bVec,Cost
   return(ValueVector)
 }
 
-ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,AttackCDFVec,Policy,CostToProgressList=NULL,PrintOutput=FALSE)
+ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,Policy,CostToProgressList=NULL,PrintOutput=FALSE)
 {
   if(is.null(CostToProgressList))
   {
     CreatedCostLists=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
     CostToProgressList=CreatedCostLists$CostToProgressList
   } 
-  
   step=1
   BoundWidthError=Tolerance+1
-  PriorValueFunction=ValueFunctionForPolicy(0,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,Policy)
+  PriorValueFunction=ValueFunctionForPolicy(0,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,Policy,CostToProgressList,PrintOutput)
   while(step<=MaxNoSteps && BoundWidthError>=Tolerance)
   {
     if(PrintOutput)
@@ -264,6 +263,8 @@ ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatri
     CostBetweenSteps=NewValueFunction-PriorValueFunction
     MaxForStates=max(CostBetweenSteps)
     MinForStates=min(CostBetweenSteps)
+    print(MinForStates)
+    
     
     #print(NewValueFunction)
     #print(CostBetweenSteps)
@@ -304,6 +305,7 @@ ValueIterationForPolicy<-function(MaxNoSteps,Tolerance,StateSpace,AdjacencyMatri
     {
      print("Returning due to time out")
     }
+    
     return(list(LowerBound=MinForStates,UpperBound=MaxForStates,ValueFunction=NewValueFunction,StepsRun=step-1))
   }
 }

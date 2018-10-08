@@ -8,6 +8,7 @@ CreateIndexList<-function(OmegaStepSize,AdjMatrix,n,CostVec,LambdaVec,AttackCDFV
   for(i in 1:n)
   {
     IndexFinder=FindIndexMatrix(OmegaStepSize,AttackCDFVec[[i]],BVec[i],bVec[i],CostVec[i],LambdaVec[i],MinTolerance,MaxSteps,TypeOfAttackTimeDis="CDF")
+    print(IndexFinder)
     IndexList[[i]]=AlterIndexMatrix(IndexFinder$IndexMatrix,IndexFinder$BoundaryHitValue,IgnoreIndexibility=F)
   }
   return(IndexList)

@@ -3,11 +3,14 @@ source("Value Iteration approach.R")
 
 #This function runs our optimality and heuristic policy to compare the answers
 #It runs the optimal policy to find the optimal answer then runs the policy in value iteration
-RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,HeuristicDepth,IndexList,MaxStepsForIteration,
+RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,HeuristicFunction,HeuristicDepth,IndexList,MaxStepsForIteration,
                   UseValueItForOptimal=FALSE,ValueItOptMaxSteps=500,ValueItOptTolerance=0.001,PrintOutput=FALSE)
 {
   n=nrow(AdjacencyMatrix)
-  
+  CostToProgressGen=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+  CostToProgressList=CostToProgressGen$CostToProgressList
+  CostToProgressArrivalsList=CostToProgressGen$CostToProgressArrivalsList
+  CostToProgressObsList=CostToProgressGen$CostToProgressObsList
   
   #We first solve for optimality using the dual
   if(UseValueItForOptimal==FALSE)
@@ -16,7 +19,7 @@ RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,
    {
      print("We are going to solve the dual problem first")
    }
-   DualSolved=SolveDualLP(AdjacencyMatrix,n,AttackCDFVec,CostVec,LambdaVec,BVec,bVec)
+   DualSolved=SolveDualLP(AdjacencyMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
    DualObjectiveValue=DualSolved$Value
    StateSpace=DualSolved$StateSpace
    if(PrintOutput)
@@ -31,7 +34,7 @@ RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,
     {
       print("We are going to solve value iteration to near optimum")
     }
-    DualSolved=ValueIterationForGame(ValueItOptMaxSteps,ValueItOptTolerance,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec)
+    DualSolved=ValueIterationForGame(ValueItOptMaxSteps,ValueItOptTolerance,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,PrintOutput)
     DualObjectiveValue=DualSolved$LowerBound
     StateSpace=DualSolved$StateSpace
     if(PrintOutput)
@@ -46,7 +49,8 @@ RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,
   {
    print("We are creating the Heuristic Policy")
   }
-  PolicyByHeuristic=HeuristicPolicy(HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexForNodeFunction,CostVec,LambdaVec,bVec,xVec,StateSpace)
+  PolicyByHeuristic=HeuristicPolicy(HeuristicDepth,HeuristicFunction,n,AdjacencyMatrix,IndexList,CostVec,LambdaVec,BVec,bVec,AttackCDFVec,StateSpace,CostToProgressList,
+                                    CostToProgressArrivalsList,CostToProgressObsList,PrintOutput)
   if(PrintOutput)
   {
    print("Policy Has been created")
@@ -58,7 +62,8 @@ RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,
   ToleranceForIt=10^floor(log10(DualObjectiveValue)-4)
 
   
-  ValueItByHeuristic=ValueIterationForPolicy(MaxStepsForIteration,ToleranceForIt,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PolicyByHeuristic)
+  ValueItByHeuristic=ValueIterationForPolicy(MaxStepsForIteration,ToleranceForIt,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,
+                                             PolicyByHeuristic,CostToProgressList,PrintOutput)
   
   #ValueFuncByHeuristic=ValueFunctionForPolicy(100,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PolicyByHeuristic)
   ValueFuncByHeuristic=ValueItByHeuristic$ValueFunction
@@ -83,32 +88,56 @@ RunTest<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,HeuristicFunction,
 }
 
 #The aim of this function is to the run the test (on a scenario) for multiple heuristics
-RunTestForMultipleHeuristics<-function(AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,
-                                       MaxStepsForIteration,PrintOutput=TRUE)
+RunTestForMultipleHeuristics<-function(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexLists,
+                                       MaxStepsForIteration,PrintOutput=TRUE,UseValueItForOptimal=FALSE)
 {
   NumberOfHeuristicFuncs=length(ListOfHeuristicFunctions)
   NumberOfHeuristicsDepths=length(ListOfHeuristicDepths)
-  NumberOfIndexFuncs=length(ListOfIndexForNodeFunctions)
+  NumberOfIndexFuncs=length(ListOfIndexLists)
   
   #We solve the dual problem once
   n=nrow(AdjacencyMatrix)
+  CostToProgressGen=CreateCostToProgressList(BVec,bVec,CostVec,LambdaVec,AttackCDFVec)
+  CostToProgressList=CostToProgressGen$CostToProgressList
+  CostToProgressArrivalsList=CostToProgressGen$CostToProgressArrivalsList
+  CostToProgressObsList=CostToProgressGen$CostToProgressObsList
+  
+  
   #We first solve for optimality using the dual
-  if(PrintOutput)
+  if(UseValueItForOptimal==FALSE)
   {
-   print("We are going to solve the dual problem first")
-  }
+   if(PrintOutput)
+   {
+    print("We are going to solve the dual problem first")
+   }
   
-  DualSolved=SolveDualLP(AdjacencyMatrix,n,xVec,bVec,CostVec,LambdaVec)
-  DualObjectiveValue=DualSolved$Value
-  StateSpace=DualSolved$StateSpace
-  if(PrintOutput)
-  {
+   DualSolved=SolveDualLP(AdjacencyMatrix,n,CostVec,LambdaVec,AttackCDFVec,BVec,bVec)
+   DualObjectiveValue=DualSolved$Value
+   StateSpace=DualSolved$StateSpace
+   if(PrintOutput)
+   {
     print(paste("Dual has been solved for:",toString(DualObjectiveValue)))
+   }
+  }
+  else if(UseValueItForOptimal==TRUE)
+  {
+    #Instead we use value iteration to get the 'optimal' answer
+    if(PrintOutput)
+    {
+      print("We are going to solve value iteration to near optimum")
+    }
+    DualSolved=ValueIterationForGame(ValueItOptMaxSteps,ValueItOptTolerance,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,PrintOutput)
+    DualObjectiveValue=DualSolved$LowerBound
+    StateSpace=DualSolved$StateSpace
+    if(PrintOutput)
+    {
+      print(paste("Value iteration solved for:",toString(DualObjectiveValue))) 
+    }
+    
   }
   
-  
-  if(DualObjectiveValue>0)
-  {
+   if(DualObjectiveValue>0)
+   {
     ToleranceForIt=10^floor(log10(DualObjectiveValue)-6)
   }
   else
@@ -140,7 +169,8 @@ RunTestForMultipleHeuristics<-function(AdjacencyMatrix,xVec,bVec,CostVec,LambdaV
         }
         
         PolicyByHeuristic=HeuristicPolicy(ListOfHeuristicDepths[HeuristicDepthNum],ListOfHeuristicFunctions[[HeuristicFuncNum]],
-                                          n,AdjacencyMatrix,ListOfIndexForNodeFunctions[[IndexFuncNum]],CostVec,LambdaVec,bVec,xVec,StateSpace)
+                                          n,AdjacencyMatrix,ListOfIndexLists[[IndexFuncNum]],CostVec,LambdaVec,BVec,bVec,AttackCDFVec,StateSpace,CostToProgressList,
+                                          CostToProgressArrivalsList,CostToProgressObsList,PrintOutput)
         if(PrintOutput)
         {
          print("Policy Has been created")
@@ -148,7 +178,8 @@ RunTestForMultipleHeuristics<-function(AdjacencyMatrix,xVec,bVec,CostVec,LambdaV
         
         
         #Run the heuristic
-        ValueItByHeuristic=ValueIterationForPolicy(MaxStepsForIteration,ToleranceForIt,StateSpace,AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,PolicyByHeuristic)
+        ValueItByHeuristic=ValueIterationForPolicy(MaxStepsForIteration,ToleranceForIt,StateSpace,AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,
+                                                   PolicyByHeuristic,CostToProgressList,PrintOutput)
         
         ValueFuncByHeuristic=ValueItByHeuristic$ValueFunction
         ValueFunSteps=ValueItByHeuristic$StepsRun
@@ -275,9 +306,10 @@ GenerateAdjConnectedMatrix<-function(NumNodes,NumEdges)
   return(AdjacencyMatrix)
 }
 
-#Generate Scenarios- This function generates a collection of adjacency matrices, xVec, bVec, LambdaVec and CostVec within a given range.
+#Generate Scenarios- This function generates a collection of adjacency matrices, CDFS, bVec, LambdaVec and CostVec within a given range.
+#The Collection of CDF's will be a huge list of CDF's with B's (as a list of lists)
 #Note. The matrix will be connected.
-GenerateTestScenarios<-function(MinNumNodes,MaxNumNodes,MinAttackTime,MaxAttackTime,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
+GenerateTestScenarios<-function(MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
 {
   #Note becase of the ceiling we will be using the min-1 instead of min
   
@@ -288,71 +320,54 @@ GenerateTestScenarios<-function(MinNumNodes,MaxNumNodes,MinAttackTime,MaxAttackT
   
   n=NumberOfNodes
   
-  #Generate the xvec,bvec,lambdavec,costvec
-  xVec=runif(n,min=MinAttackTime,max=MaxAttackTime)
+  #Generate Attack CDF's and BVec
+  AmountOfCDFChoice=length(CollectionOfCDFDistributions)
+  AttackCDFVec=list(length=n)
+  BVec=vector(length=n)
+  for(i in 1:n)
+  {
+    Choice=1#runif(n,min=1,max=AmountOfCDFChoice)
+    CDFChoice=CollectionOfCDFDistributions[[Choice]]
+    AttackCDFVec[[i]]=CDFChoice$CDF
+    BVec[i]=CDFChoice$B
+  }
+  #Generate the bvec,lambdavec,costvec
   bVec=ceiling(runif(n,min=MinObservedSize-1,max=MaxObservedSize))
   LambdaVec=runif(n,min=MinArrivalRate,max=MaxArrivalRate)
   CostVec=runif(n,min=MinCost,max=MaxCost)
   
-  return(list(AdjacencyMatrix=AdjacencyMatrix,xVec=xVec,bVec=bVec,LambdaVec=LambdaVec,CostVec=CostVec))
-}
-
-#This generates a scenario for a fixed
-GenerateTestScenariosVec<-function(NumNodes,MinAttackTimeVec,MaxAttackTimeVec,MinObservedSizeVec,MaxObservedSizeVec,MinArrivalRateVec,
-                                   MaxArrivalRateVec,MinCostVec,MaxCostVec)
-{
-  #Note becase of the ceiling we will be using the min-1 instead of min
-  
-  #Generating the Matrix
-  NumberOfNodes=NumNodes
-  NumberOfEdges=ceiling(runif(1,min=(NumberOfNodes-1)-1,max=((NumberOfNodes-1)*NumberOfNodes/2)))
-  AdjacencyMatrix=GenerateAdjConnectedMatrix(NumberOfNodes,NumberOfEdges)
-  
-  n=NumberOfNodes
-  # print(MinAttackTimeVec)
-  #       print(MaxAttackTimeVec)
-  #       print(MinObservedSizeVec)
-  #       print(MaxObservedSizeVec)
-  #       print(MinArrivalRateVec)
-  #       print(MaxArrivalRateVec)
-  #       print(MinCostVec)
-  #       print(MaxCostVec)
-  #Generate the xvec,bvec,lambdavec,costvec
-        xVec=vector(length=n)
-        bVec=vector(length=n)
-        LambdaVec=vector(length=n)
-        CostVec=vector(length=n)
-  for(i in 1:n)
-  {
-   xVec[i]=runif(1,min=MinAttackTimeVec[i],max=MaxAttackTimeVec[i])
-   bVec[i]=ceiling(runif(1,min=MinObservedSizeVec[i]-1,max=MaxObservedSizeVec[i]))
-   LambdaVec[i]=runif(1,min=MinArrivalRateVec[i],max=MaxArrivalRateVec[i])
-   CostVec[i]=runif(1,min=MinCostVec[i],max=MaxCostVec[i])    
-  }
-
-  
-  return(list(AdjacencyMatrix=AdjacencyMatrix,xVec=xVec,bVec=bVec,LambdaVec=LambdaVec,CostVec=CostVec))
-  
+  return(list(AdjacencyMatrix=AdjacencyMatrix,BVec=BVec,bVec=bVec,LambdaVec=LambdaVec,CostVec=CostVec,AttackCDFVec=AttackCDFVec,NumNodes=NumberOfNodes))
 }
   
 #This function is going to run the test for multiple scenarios
-RunTestForMultipleScenarios<-function(NumberOfScenarios,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,MaxStepsForIteration,
-                                      MinNumNodes,MaxNumNodes,MinAttackTime,MaxAttackTime,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
+RunTestForMultipleScenarios<-function(NumberOfScenarios,ListOfHeuristicFunctions,ListOfHeuristicDepths,MaxStepsForIteration,IndexOmegaStepSize,MinIndexTolerance,MaxIndexSteps,
+                                      MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
 {
   #This  matrix  stores the minerror,the best heuristic and the scenario
-  ScenarioRecording=matrix(list(),nrow=NumberOfScenarios,ncol=8)
+  ScenarioRecording=matrix(list(),nrow=NumberOfScenarios,ncol=9)
   for(ScenarioNumber in 1:NumberOfScenarios)
   {
     #For each scenario we generate  the  scenario
-    Scenario=GenerateTestScenarios(MinNumNodes,MaxNumNodes,MinAttackTime,MaxAttackTime,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
+    Scenario=GenerateTestScenarios(MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
     print("Generated Scenario")
     AdjacencyMatrix=Scenario$AdjacencyMatrix
-    xVec=Scenario$xVec
+    BVec=Scenario$BVec
     bVec=Scenario$bVec
     LambdaVec=Scenario$LambdaVec
     CostVec=Scenario$CostVec
+    AttackCDFVec=Scenario$AttackCDFVec
     
-    ScenarioTest=RunTestForMultipleHeuristics(AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,MaxStepsForIteration)
+    #Create Index List for scenario
+    print(AdjacencyMatrix)
+    print(CostVec)
+    print(LambdaVec)
+    print(AttackCDFVec)
+    print(BVec)
+    print(bVec)
+    
+    ListOfIndexList=list(CreateIndexList(IndexOmegaStepSize,AdjacencyMatrix,ncol(AdjacencyMatrix),CostVec,LambdaVec,AttackCDFVec,BVec,bVec,MinIndexTolerance,MaxIndexSteps))
+    
+    ScenarioTest=RunTestForMultipleHeuristics(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexList,MaxStepsForIteration)
     BestHeuristics=ScenarioTest$BestHeuristics
     MinError=ScenarioTest$MinError
     Errors=ScenarioTest$Errors
@@ -361,36 +376,51 @@ RunTestForMultipleScenarios<-function(NumberOfScenarios,ListOfHeuristicFunctions
     ScenarioRecording[[ScenarioNumber,1]]=MinError
     ScenarioRecording[[ScenarioNumber,2]]=BestHeuristics
     ScenarioRecording[[ScenarioNumber,3]]=AdjacencyMatrix
-    ScenarioRecording[[ScenarioNumber,4]]=xVec
+    ScenarioRecording[[ScenarioNumber,4]]=BVec
     ScenarioRecording[[ScenarioNumber,5]]=bVec
     ScenarioRecording[[ScenarioNumber,6]]=LambdaVec
     ScenarioRecording[[ScenarioNumber,7]]=CostVec
-    ScenarioRecording[[ScenarioNumber,8]]=Errors
+    ScenarioRecording[[ScenarioNumber,8]]=AttackCDFVec
+    ScenarioRecording[[ScenarioNumber,9]]=Errors
     #print(Scenario)
     
   }
   return(ScenarioRecording)
 }
 
+
 #This function is going to run the test for multiple scenarios- With a fixed complete graph
-RunTestForMultipleScenariosCompleteGraphs<-function(NumberOfScenarios,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,MaxStepsForIteration,
-                                      SizeOfCompleteGraph,MinAttackTimeVec,MaxAttackTimeVec,MinObservedSizeVec,MaxObservedSizeVec,MinArrivalRateVec,MaxArrivalRateVec,MinCostVec,MaxCostVec)
+RunTestForMultipleScenariosCompleteGraphs<-function(NumberOfScenarios,ListOfHeuristicFunctions,ListOfHeuristicDepths,MaxStepsForIteration,IndexOmegaStepSize,MinIndexTolerance,MaxIndexSteps,
+                                      MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
 {
+  
   #This  matrix  stores the minerror,the best heuristic and the scenario
-  ScenarioRecording=matrix(list(),nrow=NumberOfScenarios,ncol=8)
-  AdjacencyMatrix=matrix(rep(1,SizeOfCompleteGraph*SizeOfCompleteGraph),nrow=SizeOfCompleteGraph)
+  ScenarioRecording=matrix(list(),nrow=NumberOfScenarios,ncol=9)
   for(ScenarioNumber in 1:NumberOfScenarios)
   {
     #For each scenario we generate  the  scenario
-    Scenario=GenerateTestScenariosVec(SizeOfCompleteGraph,MinAttackTimeVec,MaxAttackTimeVec,MinObservedSizeVec,MaxObservedSizeVec,MinArrivalRateVec,
-                                   MaxArrivalRateVec,MinCostVec,MaxCostVec)
+    Scenario=GenerateTestScenarios(MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
     print("Generated Scenario")
-    xVec=Scenario$xVec
+    #We will manually alter adjacency 
+    SizeOfCompleteGraph=Scenario$NumNodes
+    AdjacencyMatrix=matrix(rep(1,SizeOfCompleteGraph*SizeOfCompleteGraph),nrow=SizeOfCompleteGraph)
+    BVec=Scenario$BVec
     bVec=Scenario$bVec
     LambdaVec=Scenario$LambdaVec
     CostVec=Scenario$CostVec
+    AttackCDFVec=Scenario$AttackCDFVec
     
-    ScenarioTest=RunTestForMultipleHeuristics(AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,MaxStepsForIteration)
+    #Create Index List for scenario
+    print(AdjacencyMatrix)
+    print(CostVec)
+    print(LambdaVec)
+    print(AttackCDFVec)
+    print(BVec)
+    print(bVec)
+    
+    ListOfIndexList=list(CreateIndexList(IndexOmegaStepSize,AdjacencyMatrix,ncol(AdjacencyMatrix),CostVec,LambdaVec,AttackCDFVec,BVec,bVec,MinIndexTolerance,MaxIndexSteps))
+    
+    ScenarioTest=RunTestForMultipleHeuristics(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexList,MaxStepsForIteration)
     BestHeuristics=ScenarioTest$BestHeuristics
     MinError=ScenarioTest$MinError
     Errors=ScenarioTest$Errors
@@ -399,11 +429,12 @@ RunTestForMultipleScenariosCompleteGraphs<-function(NumberOfScenarios,ListOfHeur
     ScenarioRecording[[ScenarioNumber,1]]=MinError
     ScenarioRecording[[ScenarioNumber,2]]=BestHeuristics
     ScenarioRecording[[ScenarioNumber,3]]=AdjacencyMatrix
-    ScenarioRecording[[ScenarioNumber,4]]=xVec
+    ScenarioRecording[[ScenarioNumber,4]]=BVec
     ScenarioRecording[[ScenarioNumber,5]]=bVec
     ScenarioRecording[[ScenarioNumber,6]]=LambdaVec
     ScenarioRecording[[ScenarioNumber,7]]=CostVec
-    ScenarioRecording[[ScenarioNumber,8]]=Errors
+    ScenarioRecording[[ScenarioNumber,8]]=AttackCDFVec
+    ScenarioRecording[[ScenarioNumber,9]]=Errors
     #print(Scenario)
     
   }
@@ -439,23 +470,37 @@ CreateLineGraph<-function(NumNodes)
 }
 
 #This function is going to run the test for multiple scenarios- With a fixed complete graph
-RunTestForMultipleScenariosLineGraphs<-function(NumberOfScenarios,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,MaxStepsForIteration,
-                                                    SizeOfLineGraph,MinAttackTimeVec,MaxAttackTimeVec,MinObservedSizeVec,MaxObservedSizeVec,MinArrivalRateVec,MaxArrivalRateVec,MinCostVec,MaxCostVec)
+RunTestForMultipleScenariosLineGraphs<-function(NumberOfScenarios,ListOfHeuristicFunctions,ListOfHeuristicDepths,MaxStepsForIteration,IndexOmegaStepSize,MinIndexTolerance,MaxIndexSteps,
+                                                MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
 {
+  
   #This  matrix  stores the minerror,the best heuristic and the scenario
-  ScenarioRecording=matrix(list(),nrow=NumberOfScenarios,ncol=8)
-  AdjacencyMatrix=CreateLineGraph(SizeOfLineGraph)
+  ScenarioRecording=matrix(list(),nrow=NumberOfScenarios,ncol=9)
   for(ScenarioNumber in 1:NumberOfScenarios)
   {
     #For each scenario we generate  the  scenario
-    Scenario=GenerateTestScenariosVec(SizeOfLineGraph,MinAttackTimeVec,MaxAttackTimeVec,MinObservedSizeVec,MaxObservedSizeVec,MinArrivalRateVec,MaxArrivalRateVec,MinCostVec,MaxCostVec)
+    Scenario=GenerateTestScenarios(MinNumNodes,MaxNumNodes,CollectionOfCDFDistributions,MinObservedSize,MaxObservedSize,MinArrivalRate,MaxArrivalRate,MinCost,MaxCost)
     print("Generated Scenario")
-    xVec=Scenario$xVec
+    #We will manually alter adjacency matrix
+    SizeOfLineGraph=Scenario$NumNodes
+    AdjacencyMatrix=matrix(rep(1,SizeOfLineGraph*SizeOfLineGraph),nrow=SizeOfLineGraph)
+    BVec=Scenario$BVec
     bVec=Scenario$bVec
     LambdaVec=Scenario$LambdaVec
     CostVec=Scenario$CostVec
+    AttackCDFVec=Scenario$AttackCDFVec
     
-    ScenarioTest=RunTestForMultipleHeuristics(AdjacencyMatrix,xVec,bVec,CostVec,LambdaVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexForNodeFunctions,MaxStepsForIteration)
+    #Create Index List for scenario
+    print(AdjacencyMatrix)
+    print(CostVec)
+    print(LambdaVec)
+    print(AttackCDFVec)
+    print(BVec)
+    print(bVec)
+    
+    ListOfIndexList=list(CreateIndexList(IndexOmegaStepSize,AdjacencyMatrix,ncol(AdjacencyMatrix),CostVec,LambdaVec,AttackCDFVec,BVec,bVec,MinIndexTolerance,MaxIndexSteps))
+    
+    ScenarioTest=RunTestForMultipleHeuristics(AdjacencyMatrix,BVec,bVec,CostVec,LambdaVec,AttackCDFVec,ListOfHeuristicFunctions,ListOfHeuristicDepths,ListOfIndexList,MaxStepsForIteration)
     BestHeuristics=ScenarioTest$BestHeuristics
     MinError=ScenarioTest$MinError
     Errors=ScenarioTest$Errors
@@ -464,11 +509,12 @@ RunTestForMultipleScenariosLineGraphs<-function(NumberOfScenarios,ListOfHeuristi
     ScenarioRecording[[ScenarioNumber,1]]=MinError
     ScenarioRecording[[ScenarioNumber,2]]=BestHeuristics
     ScenarioRecording[[ScenarioNumber,3]]=AdjacencyMatrix
-    ScenarioRecording[[ScenarioNumber,4]]=xVec
+    ScenarioRecording[[ScenarioNumber,4]]=BVec
     ScenarioRecording[[ScenarioNumber,5]]=bVec
     ScenarioRecording[[ScenarioNumber,6]]=LambdaVec
     ScenarioRecording[[ScenarioNumber,7]]=CostVec
-    ScenarioRecording[[ScenarioNumber,8]]=Errors
+    ScenarioRecording[[ScenarioNumber,8]]=AttackCDFVec
+    ScenarioRecording[[ScenarioNumber,9]]=Errors
     #print(Scenario)
     
   }
